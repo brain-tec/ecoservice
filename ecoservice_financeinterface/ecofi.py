@@ -339,12 +339,21 @@ class ecofi(osv.osv):
             errorcount = 0
             warncount = 0
             bookingdict = {}
+
+            if(context['export_interface'] == 'datev'):
+                bookingdict['additional_data'] = {}
+                bookingdict['additional_data']['period'] = period
+                bookingdict['additional_data']['vorlaufname'] = vorlaufname
+
             for move in self.pool.get('account.move').browse(cr, uid, account_move_ids):
+
                 self.pool.get('account.move').write(cr, uid, [move.id], {'vorlauf_id': vorlauf_id})  
                 thismovename = ustr(move.name) + ", " + ustr(move.ref) + ": "
                 bookingdictcount += 1
                 buchungserror, errorcount, thislog, partnererror, buchungszeilencount, bookingdict = self.generate_csv_move_lines(cr, uid, move, buchungserror, errorcount, thislog, thismovename, exportmethod, # pylint: disable-msg=C0301
                           partnererror, buchungszeilencount, bookingdict, context=context)
+
+
             ecofi_csv, thislog = self.generate_csv(cr, uid, ecofi_csv, bookingdict, thislog, context=context)
             if errorcount == 0:
                 out = base64.encodestring(buf.getvalue())
