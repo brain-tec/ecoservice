@@ -72,7 +72,7 @@ msgstr "Manual"
 #. module: ecoservice_financeinterface
 #: field:ecofi,zeitraum:0
 msgid "Period"
-msgstr "Zeitraum"
+msgstr "Periode"
 
 #. module: ecoservice_financeinterface
 #: model:ir.model,name:ecoservice_financeinterface.model_export_ecofi
@@ -264,21 +264,6 @@ msgstr "Gegenkonto"
 #: field:export.ecofi,period:0
 msgid "Periode"
 msgstr "Periode"
-
-#. module: ecoservice_financeinterface
-#: field:export.ecofi,date_from:0
-msgid "Date From"
-msgstr "Datum von"
-
-#. module: ecoservice_financeinterface
-#: field:export.ecofi,date_to:0
-msgid "Date To"
-msgstr "Datum bis"
-
-#. module: ecoservice_financeinterface
-#: field:export.ecofi,export_type:0
-msgid "Export Type"
-msgstr "Export Typ"
 
 #. module: ecoservice_financeinterface
 #: model:ir.model,name:ecoservice_financeinterface.model_account_move

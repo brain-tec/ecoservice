@@ -23,8 +23,8 @@
 #    Copyright (C) 2004-2010 Tiny SPRL (<http://tiny.be>).
 ##############################################################################
 
-from openerp.osv import osv
-from openerp.osv import fields
+from osv import osv
+from osv import fields
 
 
 class res_company(osv.osv):

@@ -22,13 +22,12 @@
 #    OpenERP, Open Source Management Solution
 #    Copyright (C) 2004-2010 Tiny SPRL (<http://tiny.be>).
 ##############################################################################
-from openerp.osv import osv
+from osv import osv
 from decimal import Decimal
-from openerp.tools.translate import _
-from openerp.tools import ustr
-from openerp import workflow
-import logging
-_logger = logging.getLogger(__name__)
+from tools.translate import _
+from tools import ustr
+import netsvc
+logger = netsvc.Logger()
 
 
 class ecofi(osv.osv):
@@ -44,12 +43,12 @@ class ecofi(osv.osv):
         """
         if context is None:
             context = {}
-        _logger.info("Starting Move Migration")
+        logger.notifyChannel('ecoservice_financeinterface', netsvc.LOG_INFO, "Starting Move Migration")
         invoice_ids = self.pool.get('account.invoice').search(cr, uid, [])
         counter = 0
         for invoice in self.pool.get('account.invoice').browse(cr, uid, invoice_ids, context=context):
             counter += 1
-            _logger.info(_("Migrate Move %s / %s") % (counter, len(invoice_ids)))
+            logger.notifyChannel('ecoservice_financeinterface', netsvc.LOG_INFO, _("Migrate Move %s / %s") % (counter, len(invoice_ids)))
             if invoice.move_id:
                 self.pool.get('account.move').write(cr, uid, [invoice.move_id.id], {
                                    'ecofi_buchungstext': invoice.ecofi_buchungstext or False,
@@ -62,7 +61,7 @@ class ecofi(osv.osv):
                                 if move_line.debit + move_line.credit == abs(invoice_line.price_subtotal):
                                     self.pool.get('account.move.line').write(cr, uid, [move_line.id],
                                                             {'ecofi_taxid': invoice_line.invoice_line_tax_id[0].id})
-        _logger.info(_("Move Migration Finished"))
+        logger.notifyChannel('ecoservice_financeinterface', netsvc.LOG_INFO, _("Move Migration Finished"))
         return True
 
     def field_config(self, cr, uid, move, line, errorcount, partnererror, thislog, thismovename, faelligkeit, datevdict):
@@ -81,8 +80,10 @@ class ecofi(osv.osv):
         datevdict['Datum'] = '%s%s' % (thisdate[8:10], thisdate[5:7])
         if move.name:
             datevdict['Beleg1'] = ustr(move.name)
-        if move.journal_id.type == 'purchase' and move.ref:
-            datevdict['Beleg1'] = ustr(move.ref)
+        # HACK: 20.05.2014 09:01:20: olivier: gemäss Mail von Simone vom 19.05.2014 sollen diese 2 Zeilen auskommentiert werden
+#         if move.journal_id.type == 'purchase' and move.ref:
+#             datevdict['Beleg1'] = ustr(move.ref)
+        # TODO: 31.03.2014 17:01:34: olivier: why -12?? BNK1/2014/0001 -> K1/2014/0001 -> BN will be erased??
         datevdict['Beleg1'] = datevdict['Beleg1'][-12:]
         if faelligkeit:
             datevdict['Beleg2'] = faelligkeit
@@ -156,22 +157,22 @@ class ecofi(osv.osv):
                 for buchungsatz in bookingdict['buchungen']:
                     ecofi_csv.writerow(buchungsatz)
         (ecofi_csv, log) = super(ecofi, self).generate_csv(cr, uid, ecofi_csv, bookingdict, log, context=context)
-        return ecofi_csv, log    
+        return ecofi_csv, log
         
     def generate_csv_move_lines(self, cr, uid, move, buchungserror, errorcount, thislog, thismovename, exportmethod,
                           partnererror, buchungszeilencount, bookingdict, context={}):
-        """ Implements the generate_csv_move_lines method for the datev interface     
+        """ Implements the generate_csv_move_lines method for the datev interface
         """
+        # HACK: 12.06.2014 11:23:14: olivier: set context['waehrung'] = False -> otherwise if it once will be set to True it will stay on True for all the others
+        context['waehrung'] = False
         if context.has_key('export_interface'):
             if context['export_interface'] == 'datev':
                 if bookingdict.has_key('buchungen') is False:
                     bookingdict['buchungen'] = []
                 if bookingdict.has_key('buchungsheader') is False:
-                    bookingdict['buchungsheader'] = self.buchungenHeaderDatev()    
-                faelligkeit = False  
+                    bookingdict['buchungsheader'] = self.buchungenHeaderDatev()
+                faelligkeit = False
                 for line in move.line_id:
-                    if line.debit == 0 and line.credit==0:
-                        continue
                     datevkonto = line.ecofi_account_counterpart.code
                     datevgegenkonto = ustr(line.account_id.code)
                     if datevgegenkonto == datevkonto:
@@ -184,47 +185,49 @@ class ecofi(osv.osv):
                     if line.amount_currency != 0:
                         lineumsatz = Decimal(str(line.amount_currency))
                         context['waehrung'] = True
-                    buschluessel = ''  
+                    buschluessel = ''
                     if exportmethod == 'brutto':
-                        if self.pool.get('ecofi').is_taxline(cr, line.account_id.id) and not line.ecofi_bu == 'SD':
+                        if self.pool.get('ecofi').is_taxline(cr, line.account_id.id):
                             continue
-                        if line.ecofi_bu and line.ecofi_bu == '40':
-                            buschluessel = '40'
-                        else:
-                            taxamount = self.pool.get('ecofi').calculate_tax(cr, uid, line, context)
-                            lineumsatz = lineumsatz + Decimal(str(taxamount))
-                            linetax = self.get_line_tax(cr, uid, line)
-                            if line.account_id.automatic is False and linetax:
-                                buschluessel = str(linetax.buchungsschluessel) # pylint: disable-msg=E1103
-                    umsatz, sollhaben = self.format_umsatz(cr, uid, lineumsatz, context=context)           
-                    datevdict = {'Sollhaben': sollhaben, 
-                                 'Umsatz': umsatz, 
-                                 'Gegenkonto': datevgegenkonto, 
-                                 'Datum':'',
-                                 'Konto': datevkonto or '', 
-                                 'Beleg1':'', 
-                                 'Beleg2':'',
-                                 'Waehrung':'', 
+                        taxamount = self.pool.get('ecofi').calculate_tax(cr, uid, line, context)
+                        lineumsatz = lineumsatz + Decimal(str(taxamount))
+                        linetax = False
+                        if line.account_tax_id:
+                            linetax = line.account_tax_id
+                        if line.ecofi_taxid:
+                            linetax = line.ecofi_taxid
+                        if line.account_id.automatic is False and linetax:
+                            buschluessel = str(linetax.buchungsschluessel) # pylint: disable-msg=E1103
+                    umsatz, sollhaben = self.format_umsatz(cr, uid, lineumsatz, context=context)
+                    datevdict = {'Sollhaben': sollhaben,
+                                 'Umsatz': umsatz,
+                                 'Gegenkonto': datevgegenkonto,
+                                 'Datum': '',
+                                 'Konto': datevkonto,
+                                 'Beleg1': '',
+                                 'Beleg2': '',
+                                 'Waehrung': '',
                                  'Buschluessel': buschluessel,
-                                 'Kost1':'',
-                                 'Kost2':'', 
-                                 'Kostmenge':'', 
-                                 'Skonto':'', 
-                                 'Buchungstext':'',
-                                 'EulandUSTID':'', 
-                                 'EUSteuer':'', 
-                                 'Basiswaehrungsbetrag':'',
-                                 'Basiswaehrungskennung':'', 
-                                 'Kurs':'', 
-                                 'Movename': ustr(move.name)
+                                 'Kost1': '',
+                                 'Kost2': '',
+                                 'Kostmenge': '',
+                                 'Skonto': '',
+                                 'Buchungstext': '',
+                                 'EulandUSTID': '',
+                                 'EUSteuer': '',
+                                 'Basiswaehrungsbetrag': '',
+                                 'Basiswaehrungskennung': '',
+                                 'Kurs': '',
+                                 'Movename': ustr(move.name),
+                                 'empty':''
                                  }
                     (errorcount, partnererror, thislog, thismovename, datevdict) = self.field_config(cr,
-                                                                    uid, move, line, errorcount, partnererror, thislog, 
+                                                                    uid, move, line, errorcount, partnererror, thislog,
                                                                     thismovename, faelligkeit, datevdict)
                     bookingdict['buchungen'].append(self.buchungenCreateDatev(datevdict))
                     buchungszeilencount += 1
         buchungserror, errorcount, thislog, partnererror, buchungszeilencount, bookingdict = super(ecofi, self).generate_csv_move_lines(cr,
-            uid, move, buchungserror, errorcount, thislog, thismovename, exportmethod, partnererror, buchungszeilencount, bookingdict, 
+            uid, move, buchungserror, errorcount, thislog, thismovename, exportmethod, partnererror, buchungszeilencount, bookingdict,
             context=context)
         return buchungserror, errorcount, thislog, partnererror, buchungszeilencount, bookingdict
    
@@ -232,53 +235,256 @@ class ecofi(osv.osv):
         """ Method that creates the Datev CSV Headerlione
         """
         buchung = []
-        buchung.append(ustr("Währungskennung").encode("iso-8859-1"))
-        buchung.append(ustr("Soll-/Haben-Kennzeichen").encode("iso-8859-1"))
         buchung.append(ustr("Umsatz (ohne Soll-/Haben-Kennzeichen)").encode("iso-8859-1"))
-        buchung.append(ustr("BU-Schlüssel ").encode("iso-8859-1"))
-        buchung.append(ustr("Gegenkonto (ohne BU-Schlüssel)").encode("iso-8859-1"))
-        buchung.append(ustr("Belegfeld 1").encode("iso-8859-1"))
-        buchung.append(ustr("Belegfeld 2").encode("iso-8859-1"))
-        buchung.append(ustr("Datum").encode("iso-8859-1"))
-        buchung.append(ustr("Konto").encode("iso-8859-1"))
-        buchung.append(ustr("Kostfeld 1").encode("iso-8859-1"))
-        buchung.append(ustr("Kostfeld 2").encode("iso-8859-1"))
-        buchung.append(ustr("Kostmenge").encode("iso-8859-1"))
-        buchung.append(ustr("Skonto").encode("iso-8859-1"))
-        buchung.append(ustr("Buchungstext").encode("iso-8859-1"))
-        buchung.append(ustr("EU-Land und UStID").encode("iso-8859-1"))
-        buchung.append(ustr("EU-Steuersatz").encode("iso-8859-1"))
+        buchung.append(ustr("Soll-/Haben-Kennzeichen").encode("iso-8859-1"))
+        buchung.append(ustr("Währungskennung").encode("iso-8859-1"))
+        buchung.append(ustr("Kurs").encode("iso-8859-1"))
         buchung.append(ustr("Basiswährungsbetrag").encode("iso-8859-1"))
         buchung.append(ustr("Basiswährungskennung").encode("iso-8859-1"))
-        buchung.append(ustr("Kurs").encode("iso-8859-1"))
+        buchung.append(ustr("Konto").encode("iso-8859-1"))
+        buchung.append(ustr("Gegenkonto (ohne BU-Schlüssel)").encode("iso-8859-1"))
+        buchung.append(ustr("BU-Schlüssel ").encode("iso-8859-1"))
+        buchung.append(ustr("Datum").encode("iso-8859-1"))
+        buchung.append(ustr("Belegfeld 1").encode("iso-8859-1"))
+        buchung.append(ustr("Belegfeld 2").encode("iso-8859-1"))
+        buchung.append(ustr("Skonto").encode("iso-8859-1"))
+        buchung.append(ustr("Buchungstext").encode("iso-8859-1"))
+        
+        #nicht verwendete Felder column 15-36 (22 columns)
+        buchung.append(ustr("Postensperre").encode("iso-8859-1"))
+        buchung.append(ustr("Diverse Adressnummer").encode("iso-8859-1"))
+        buchung.append(ustr("Geschäftspartnerbank").encode("iso-8859-1"))
+        buchung.append(ustr("Sachverhalt").encode("iso-8859-1"))
+        buchung.append(ustr("Zinssperre").encode("iso-8859-1"))
+        buchung.append(ustr("Beleglink").encode("iso-8859-1"))
+        
+        buchung.append(ustr("Beleginfo - Art 1").encode("iso-8859-1"))
+        buchung.append(ustr("Beleginfo - Inhalt 1").encode("iso-8859-1"))
+        buchung.append(ustr("Beleginfo - Art 2").encode("iso-8859-1"))
+        buchung.append(ustr("Beleginfo - Inhalt 2").encode("iso-8859-1"))
+        buchung.append(ustr("Beleginfo - Art 3").encode("iso-8859-1"))
+        buchung.append(ustr("Beleginfo - Inhalt 3").encode("iso-8859-1"))
+        buchung.append(ustr("Beleginfo - Art 4").encode("iso-8859-1"))
+        buchung.append(ustr("Beleginfo - Inhalt 4").encode("iso-8859-1"))
+        buchung.append(ustr("Beleginfo - Art 5").encode("iso-8859-1"))
+        buchung.append(ustr("Beleginfo - Inhalt 5").encode("iso-8859-1"))
+        
+        buchung.append(ustr("Beleginfo - Art 6").encode("iso-8859-1"))
+        buchung.append(ustr("Beleginfo - Inhalt 6").encode("iso-8859-1"))
+        buchung.append(ustr("Beleginfo - Art 7").encode("iso-8859-1"))
+        buchung.append(ustr("Beleginfo - Inhalt 7").encode("iso-8859-1"))
+        buchung.append(ustr("Beleginfo - Art 8").encode("iso-8859-1"))
+        buchung.append(ustr("Beleginfo - Inhalt 8").encode("iso-8859-1"))
+        
+        #column 37-41
+        buchung.append(ustr("Kost 1 - Kostenstelle ").encode("iso-8859-1"))
+        buchung.append(ustr("Kost 2 - Kostenstelle").encode("iso-8859-1"))
+        buchung.append(ustr("Kost-Menge").encode("iso-8859-1"))
+        buchung.append(ustr("EU-Land u. UStID").encode("iso-8859-1"))
+        buchung.append(ustr("EU-Steuersatz").encode("iso-8859-1"))
+        
+        #nicht verwendete Felder column 42-92 (51 columns)
+        buchung.append(ustr("Abw. Versteuerungsart").encode("iso-8859-1"))
+        buchung.append(ustr("Sachverhalt L+L ").encode("iso-8859-1"))
+        buchung.append(ustr("Funktionsergänzung L+L").encode("iso-8859-1"))
+        buchung.append(ustr("BU 49 Hauptfunktionstyp ").encode("iso-8859-1"))
+        buchung.append(ustr("BU 49 Hauptfunktionsnummer").encode("iso-8859-1"))
+        buchung.append(ustr("BU 49 Funktionsergänzung").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 1").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation- Inhalt 1 ").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 2 ").encode("iso-8859-1"))
+        
+        buchung.append(ustr("Zusatzinformation- Inhalt 2 ").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 3 ").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation- Inhalt 3").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 4").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation- Inhalt 4").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 5").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation- Inhalt 5").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 6 ").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation- Inhalt 6").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 7 ").encode("iso-8859-1"))
+        
+        buchung.append(ustr("Zusatzinformation- Inhalt 7").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 8 ").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation- Inhalt 8").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 9 ").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation- Inhalt 9").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 10 ").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation- Inhalt 10").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 11 ").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation- Inhalt 11").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 12").encode("iso-8859-1"))
+        
+        buchung.append(ustr("Zusatzinformation- Inhalt 12").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 13").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation- Inhalt 13").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 14").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation- Inhalt 14").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 15").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation- Inhalt 15").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 16").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation- Inhalt 16 ").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 17").encode("iso-8859-1"))
+        
+        buchung.append(ustr("Zusatzinformation- Inhalt 17").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 18").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation- Inhalt 18").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 19").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation- Inhalt 19").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation - Art 20 ").encode("iso-8859-1"))
+        buchung.append(ustr("Zusatzinformation- Inhalt 20").encode("iso-8859-1"))
+        buchung.append(ustr("Stück").encode("iso-8859-1"))
+        buchung.append(ustr("Gewicht").encode("iso-8859-1"))
+        buchung.append(ustr("Zahlweise").encode("iso-8859-1"))
+        
+        buchung.append(ustr("Forderungsart").encode("iso-8859-1"))
+        buchung.append(ustr("Veranlagungsjahr").encode("iso-8859-1"))
+        
+        #column 93
+        buchung.append(ustr("Zugeordnete Fälligkeit").encode("iso-8859-1"))
+        
         return buchung
             
     def buchungenCreateDatev(self, datevdict):
         """Method that creates the datev csv moveline
         """
-        buchung = []                     
-        buchung.append(datevdict['Waehrung'].encode("iso-8859-1"))
-        buchung.append(datevdict['Sollhaben'].encode("iso-8859-1"))
+        buchung = []
         buchung.append(datevdict['Umsatz'].encode("iso-8859-1"))
-        if datevdict['Buschluessel'] == '0':
-            datevdict['Buschluessel'] = ''            
-        buchung.append(datevdict['Buschluessel'].encode("iso-8859-1"))
-        buchung.append(datevdict['Gegenkonto'].encode("iso-8859-1"))
-        buchung.append(datevdict['Beleg1'].encode("iso-8859-1"))          
-        buchung.append(datevdict['Beleg2'].encode("iso-8859-1"))
-        buchung.append(datevdict['Datum'].encode("iso-8859-1"))
+        buchung.append(datevdict['Sollhaben'].encode("iso-8859-1"))
+        buchung.append(datevdict['Waehrung'].encode("iso-8859-1"))
+        buchung.append(datevdict['Kurs'].encode("iso-8859-1"))
+        buchung.append(datevdict['Basiswaehrungsbetrag'].encode("iso-8859-1"))
+        buchung.append(datevdict['Basiswaehrungskennung'].encode("iso-8859-1"))
         buchung.append(datevdict['Konto'].encode("iso-8859-1"))
+        buchung.append(datevdict['Gegenkonto'].encode("iso-8859-1"))
+        if datevdict['Buschluessel'] == '0':
+            datevdict['Buschluessel'] = ''
+        buchung.append(datevdict['Buschluessel'].encode("iso-8859-1"))
+        buchung.append(datevdict['Datum'].encode("iso-8859-1"))
+        buchung.append(datevdict['Beleg1'].encode("iso-8859-1"))
+        buchung.append(datevdict['Beleg2'].encode("iso-8859-1"))
+        buchung.append(datevdict['Skonto'].encode("iso-8859-1"))
+        datevdict['Buchungstext'] = datevdict['Buchungstext'][0:30]
+        buchung.append(datevdict['Buchungstext'].encode("iso-8859-1"))
+        
+        #nicht verwendete Felder column 15-36 (22 columns)
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        
+        #column 37-41
         buchung.append(datevdict['Kost1'].encode("iso-8859-1"))
         buchung.append(datevdict['Kost2'].encode("iso-8859-1"))
         buchung.append(datevdict['Kostmenge'].encode("iso-8859-1"))
-        buchung.append(datevdict['Skonto'].encode("iso-8859-1"))
-        datevdict['Buchungstext'] = datevdict['Buchungstext'][0:30]
-        buchung.append(datevdict['Buchungstext'].encode("iso-8859-1", 'ignore'))
         buchung.append(datevdict['EulandUSTID'].encode("iso-8859-1"))
         buchung.append(datevdict['EUSteuer'].encode("iso-8859-1"))
-        buchung.append(datevdict['Basiswaehrungsbetrag'].encode("iso-8859-1"))
-        buchung.append(datevdict['Basiswaehrungskennung'].encode("iso-8859-1"))
-        buchung.append(datevdict['Kurs'].encode("iso-8859-1"))
+        
+        #nicht verwendete Felder column 42-92 (51 columns)
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        
+        #column 93
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        
+        #original
+#         buchung.append(datevdict['Waehrung'].encode("iso-8859-1"))
+#         buchung.append(datevdict['Sollhaben'].encode("iso-8859-1"))
+#         buchung.append(datevdict['Umsatz'].encode("iso-8859-1"))
+#         if datevdict['Buschluessel'] == '0':
+#             datevdict['Buschluessel'] = ''
+#         buchung.append(datevdict['Buschluessel'].encode("iso-8859-1"))
+#         buchung.append(datevdict['Gegenkonto'].encode("iso-8859-1"))
+#         buchung.append(datevdict['Beleg1'].encode("iso-8859-1"))
+#         buchung.append(datevdict['Beleg2'].encode("iso-8859-1"))
+#         buchung.append(datevdict['Datum'].encode("iso-8859-1"))
+#         buchung.append(datevdict['Konto'].encode("iso-8859-1"))
+#         buchung.append(datevdict['Kost1'].encode("iso-8859-1"))
+#         buchung.append(datevdict['Kost2'].encode("iso-8859-1"))
+#         buchung.append(datevdict['Kostmenge'].encode("iso-8859-1"))
+#         buchung.append(datevdict['Skonto'].encode("iso-8859-1"))
+#         datevdict['Buchungstext'] = datevdict['Buchungstext'][0:30]
+#         buchung.append(datevdict['Buchungstext'].encode("iso-8859-1"))
+#         buchung.append(datevdict['EulandUSTID'].encode("iso-8859-1"))
+#         buchung.append(datevdict['EUSteuer'].encode("iso-8859-1"))
+#         buchung.append(datevdict['Basiswaehrungsbetrag'].encode("iso-8859-1"))
+#         buchung.append(datevdict['Basiswaehrungskennung'].encode("iso-8859-1"))
+#         buchung.append(datevdict['Kurs'].encode("iso-8859-1"))
         return buchung
     
 ecofi()

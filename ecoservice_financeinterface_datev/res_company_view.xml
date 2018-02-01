@@ -30,9 +30,9 @@
             <field name="model">res.company</field>
             <field name="type">form</field>
             <field name="arch" type="xml">
-                <page string="Financeinterface" position="inside">
+                <xpath expr="//field[@name='finance_interface']" position="after"> 
                     <field name="exportmethod" colspan ="4" attrs="{'invisible' : [('finance_interface','!=','datev')]}"/>
-                </page>
+                </xpath>
             </field>
         </record>
    </data>

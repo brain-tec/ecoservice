@@ -57,12 +57,12 @@ class ecoservice_partner_auto_account_company(osv.osv):
     def get_accounts(self, cr, uid, partner_id, context=None):
         if context is None:
             context = {}
-        partner_data = self.pool.get('res.partner').read(cr, uid, partner_id, ['name', 'customer', 'supplier'], context=context)
+        partner_name = self.pool.get('res.partner').read(cr, uid, partner_id, ['name'], context=context)['name']
         user_company = self.pool.get('res.users').read(cr, uid, uid, ['company_id'])['company_id'][0]
         config_ids = self.search(cr, uid, [('company_id', '=', user_company)])
         account_obj = self.pool.get('account.account')
         for config in self.browse(cr, uid, config_ids, context=context):
-            if partner_data['customer'] and 'type' in context and context['type'] == 'receivable' or 'type' not in context:
+            if 'type' in context and context['type'] == 'receivable' or 'type' not in context:
                 receivable_field_ids = self.pool.get('ir.model.fields').search(cr, uid, [('model', '=', 'res.partner'), ('name', '=', 'property_account_receivable')])
                 if len(receivable_field_ids) == 1:
                     property_ids = self.pool.get('ir.property').search(cr, uid, [('company_id', '=', config.company_id.id),
@@ -71,14 +71,13 @@ class ecoservice_partner_auto_account_company(osv.osv):
                                                                                  ('fields_id', '=', receivable_field_ids[0])])
                     receivable_code = self.pool.get('ir.sequence').get_id(cr, uid, config.receivable_sequence_id.id, context=context)
                     receivable_account_values = {
-                        'name': partner_data['name'],
+                        'name': partner_name,
                         'currency_id': config.receivable_template_id.currency_id and config.receivable_template_id.currency_id.id or False,
                         'code': receivable_code,
                         'type': config.receivable_template_id.type,
                         'user_type': config.receivable_template_id.user_type and config.receivable_template_id.user_type.id or False,
                         'reconcile': config.receivable_template_id.reconcile,
                         'shortcut': config.receivable_template_id.shortcut,
-                        'parent_id': config.receivable_template_id.parent_id and config.receivable_template_id.parent_id.id or False,
                         'note': config.receivable_template_id.note,
                         'tax_ids': [(6, 0, config.receivable_template_id.tax_ids)],
                         'company_id': config.company_id.id,
@@ -96,20 +95,18 @@ class ecoservice_partner_auto_account_company(osv.osv):
                         self.pool.get('ir.property').create(cr, uid, receivable_property_value, context=context)
                     else:
                         self.pool.get('ir.property').write(cr, uid, property_ids, receivable_property_value, context=context)
-                    self.pool.get('res.partner').write(cr, uid, partner_id, {'receivable_account_created':True})
-            if partner_data['supplier'] and 'type' in context and context['type'] == 'payable' or 'type' not in context:
+            if 'type' in context and context['type'] == 'payable' or 'type' not in context:
                 payable_field_ids = self.pool.get('ir.model.fields').search(cr, uid, [('model', '=', 'res.partner'), ('name', '=', 'property_account_payable')])
                 if len(payable_field_ids) == 1:
                     payable_code = self.pool.get('ir.sequence').get_id(cr, uid, config.payable_sequence_id.id, context=context)
                     payable_account_values = {
-                        'name': partner_data['name'],
+                        'name': partner_name,
                         'currency_id': config.payable_template_id.currency_id and config.payable_template_id.currency_id.id or False,
                         'code': payable_code,
                         'type': config.payable_template_id.type,
                         'user_type': config.payable_template_id.user_type and config.payable_template_id.user_type.id or False,
                         'reconcile': config.payable_template_id.reconcile,
                         'shortcut': config.payable_template_id.shortcut,
-                        'parent_id': config.payable_template_id.parent_id and config.payable_template_id.parent_id.id or False,
                         'note': config.payable_template_id.note,
                         'tax_ids': [(6, 0, config.payable_template_id.tax_ids)],
                         'company_id': config.company_id.id,
@@ -131,7 +128,6 @@ class ecoservice_partner_auto_account_company(osv.osv):
                         self.pool.get('ir.property').create(cr, uid, payable_property_value, context=context)
                     else:
                         self.pool.get('ir.property').write(cr, uid, property_ids, payable_property_value, context=context)
-                    self.pool.get('res.partner').write(cr, uid, partner_id, {'payable_account_created':True})
         return True
 
 ecoservice_partner_auto_account_company()
@@ -139,28 +135,9 @@ ecoservice_partner_auto_account_company()
 
 class eco_partner(osv.osv):
     _inherit = 'res.partner'
-    
-    _columns={
-              'receivable_account_created' : fields.boolean('Receivable account created', invisible=True),
-              'payable_account_created' : fields.boolean('Payable account created', invisible=True)
-              }
 
     def create_accounts(self, cr, uid, ids, context={}):
-        res_id = self.pool.get('ir.model.data').get_object_reference(cr,uid,'account','group_account_manager')
-        user_in_group = False
-        if res_id:
-            cr.execute("Select * from res_groups_users_rel where gid = %s and uid = %s" % (res_id[1], uid))
-            res_groups_users_rel = map(lambda x: x[0], cr.fetchall())
-            if res_groups_users_rel:
-                user_in_group = True
-
         for partner in ids:
-            partner_data = self.read(cr, uid, partner, ['receivable_account_created', 'payable_account_created'], context=context)
-            if 'type' in context and context['type'] == 'payable' and partner_data and 'payable_account_created' in partner_data and partner_data['payable_account_created'] and not user_in_group:
-                raise osv.except_osv(_("Warning"),_("Couldn't create payable account. It already exists!"))
-            elif 'type' in context and context['type'] == 'receivable' and partner_data and 'receivable_account_created' in partner_data and partner_data['receivable_account_created'] and not user_in_group:
-                raise osv.except_osv(_("Warning"),_("Couldn't create receivable account. It already exists!"))
-            else: 
-                self.pool.get('ecoservice.partner.auto.account.company').get_accounts(cr, uid, partner, context=context)
+            self.pool.get('ecoservice.partner.auto.account.company').get_accounts(cr, uid, partner, context=context)
         return True
 eco_partner()

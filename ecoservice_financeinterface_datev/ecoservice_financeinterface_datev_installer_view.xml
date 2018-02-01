@@ -27,19 +27,34 @@
         <record id="view_ecoservice_financeinterface_datev_installer" model="ir.ui.view">
             <field name="name">ecoservice.financeinterface.datev.installer.view</field>
             <field name="model">ecoservice.financeinterface.datev.installer</field>
+            <field name="type">form</field>
             <field name="inherit_id" ref="base.res_config_installer"/>
             <field name="arch" type="xml">
-            	<form position="attributes">
-                    <attribute name="string">Installation</attribute>
-                </form>
-                <separator string="title" position="replace">
-                	<separator string="Installation"/>
-                </separator>
+                <data>
+                    <form position="attributes">
+                        <attribute name="string">Migration of Account Moves for Datevexports</attribute>
+                    </form>
+                    <xpath expr="//separator[@string='title']" position="after" version="7.0">
+                        <header>
+                            <button string="Apply" type="object" name="execute" class="oe_highlight"/>
+                            or
+                            <button string="Cancel" type="object" name="cancel" class="oe_link"/>
+                        </header>
+                        <separator string="Migration"/>
+                        <p>If you select this, all account moves from invoices will be migrated.</p>
+                        <group>
+                            <field name="migrate_datev" string="Migrate" colspan="1"/>
+                        </group>
+                    </xpath>
+                    <separator string="title" position="attributes">
+                        <attribute name="string"></attribute>
+                    </separator>
+                </data>
             </field>
         </record>
 
         <record id="action_ecoservice_financeinterface_datev_installer" model="ir.actions.act_window">
-            <field name="name">Datev Installation</field>
+            <field name="name">Datev Migration</field>
             <field name="type">ir.actions.act_window</field>
             <field name="res_model">ecoservice.financeinterface.datev.installer</field>
             <field name="view_id" ref="view_ecoservice_financeinterface_datev_installer"/>
@@ -50,7 +65,7 @@
 
         <record id="ecoservice_financeinterface_datev_todo" model="ir.actions.todo">
             <field name="action_id" ref="action_ecoservice_financeinterface_datev_installer"/>
-            <field name="sequence">2</field>
+            <field name="sequence">3</field>
             <field name="type">automatic</field>
         </record>
 

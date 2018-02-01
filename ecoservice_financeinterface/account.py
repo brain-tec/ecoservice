@@ -129,8 +129,9 @@ class account_move(osv.osv):
                     self.pool.get('account.move.line').create_update_taxline(cr, uid, [line.id], context=context)
         if context is None:
             context = {}
-        res = super(account_move, self).post(cr, uid, ids, context=context)
+        # HACK: 15.09.2014 14:16:42: olivier: do first the finance_interface_checks and then the post of the account_move -> otherwise we got an error when booking the opening entries
         self.finance_interface_checks(cr, uid, ids, context)
+        res = super(account_move, self).post(cr, uid, ids, context=context)
         return res
 account_move()
 
@@ -243,15 +244,14 @@ class account_move_line(osv.osv):
                     all_taxes['credit'] = all_taxes['credit'] - all_taxes['debit']
                     all_taxes['debit'] = 0
                 actual_move = self.browse(cr, uid, move_line.id, context=context)
-                write_dict = {
+                self.write(cr, uid, [move_line.id], {
                     'ecofi_brutto_credit': actual_move.credit,
                     'ecofi_brutto_debit': actual_move.debit,
                     'debit': actual_move.debit - all_taxes['debit'],
                     'credit': actual_move.credit - all_taxes['credit'],
                     'tax_code_id': real_tax_code_id,
                     'tax_amount': real_tax_amount
-                }
-                self.write(cr, uid, [move_line.id], write_dict, context=context)
+                }, context=context)
 account_move_line()
 
 
@@ -263,17 +263,14 @@ class account_invoice(osv.osv):
                 'ecofi_buchungstext': fields.char('Export Voucher Text', size=30),
     }
 
-    def action_move_create(self, cr, uid, ids, context=None):
+    def action_move_create(self, cr, uid, ids, *args):
         """Extends the original action_move_create so that if
          an invoice is confirmed the finance interface attributes are transfered to the account move
         :param cr: the current row, from the database cursor,
         :param uid: the current user’s ID for security checks,
         :param ids: List of account_move IDs
         """
-        if context is None:
-            context = {}
-        context['invoice_ids'] = ids
-        thisreturn = super(account_invoice, self).action_move_create(cr, uid, ids, context=context)
+        thisreturn = super(account_invoice, self).action_move_create(cr, uid, ids, *args)
         if thisreturn:
             invoice = self.browse(cr, uid, ids)[0]
             self.pool.get('account.move').write(cr, uid, [invoice.move_id.id], {
@@ -367,6 +364,8 @@ class account_tax(osv.osv):
         tex = []
         for tax in taxes:
             tin.append(tax)
+        print tex
+        print tin
         tin = self.compute_inv(cr, uid, tin, price_unit, quantity, product=product, partner=partner, precision=tax_compute_precision)
         for r in tin:
             totalex -= r.get('amount', 0.0)

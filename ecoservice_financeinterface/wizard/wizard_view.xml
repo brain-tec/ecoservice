@@ -31,15 +31,11 @@
              <field name="type">form</field>
              <field name="arch" type="xml">
                 <form string="Financial Export">
-                    <field name="vorlauf_id" colspan="4"  attrs="{'invisible': [('vorlauf_id','=',False)]}"/>
-                    <field name="journal_id" colspan="4" attrs="{'invisible': [('vorlauf_id','!=',False)], 'required': [('vorlauf_id','=',False)]}"/>
-                    <field name="export_type"/>
-                    <newline/>
-                    <field name="period" colspan="4" attrs="{'invisible': ['|', ('vorlauf_id','!=',False), ('export_type','!=', 'period')], 'required': [('vorlauf_id','=',False), ('export_type','=', 'period')]}"/>
-	                <field name="date_from" colspan="4" attrs="{'invisible': ['|', ('vorlauf_id','!=',False), ('export_type','!=', 'date')], 'required': [('vorlauf_id','=',False), ('export_type','=', 'date')]}"/>
-	                <field name="date_to" colspan="4" attrs="{'invisible': ['|', ('vorlauf_id','!=',False), ('export_type','!=', 'date')], 'required': [('vorlauf_id','=',False), ('export_type','=', 'date')]}"/>
-                    <button icon="gtk-cancel" special="cancel" string="Cancel" colspan="2"/>
-					<button icon="gtk-ok" string="Start Export" name="startexport" type="object"/>
+                     <field name="vorlauf_id" colspan="4"  attrs="{'invisible': [('vorlauf_id','=',False)]}"/>
+                     <field name="journal_id" colspan="4" attrs="{'invisible': [('vorlauf_id','!=',False)], 'required': [('vorlauf_id','=',False)]}"/>
+                     <field name="period" colspan="4" attrs="{'invisible': [('vorlauf_id','!=',False)], 'required': [('vorlauf_id','=',False)]}"/>
+                     <button icon="gtk-cancel" special="cancel" string="Cancel" colspan="2"/>
+                     <button icon="gtk-ok" string="Start Export" name="startexport" type="object"/>
                 </form>
              </field>
          </record>

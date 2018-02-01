@@ -22,7 +22,7 @@
 ##############################################################################
 {
     "name" : "Ecoservice Partner Account Company",
-    "version" : "1.0.34",
+    "version" : "1.0",
     "author" : "ecoservice",
     "category" : "Accounting",
     "website" : "http://www.ecoservice.de",
@@ -35,8 +35,7 @@
     "demo_xml" : [],
     "update_xml" : [
                     'ecoservice_partner_auto_account_company_data.xml',
-                    'ecoservice_partner_auto_account_company_views.xml',
-                    'security/ir.model.access.csv',
+                    'ecoservice_partner_auto_account_company_views.xml'
                     ],
     "active": False,
     "installable": True
