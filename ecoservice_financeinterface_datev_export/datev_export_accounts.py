@@ -112,7 +112,7 @@ class ecofi_datev_formate(osv.osv):
                             if convertet_value['value'] is not False:
                                 thisline.append(convertet_value['value'])
                             else:
-                                log += _("Account: %s %s could not be exported!\n" % (account.code, spalte.feldname))
+                                log += _("Account: %s could not be exported!\n" % (account.code))
                                 log += "\t %s\n" % (convertet_value['log'])
                                 writeline = False
                                 break

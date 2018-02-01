@@ -30,14 +30,12 @@
              <field name="model">datev.reference.data.export</field>
              <field name="type">form</field>
              <field name="arch" type="xml">
-                <form string="Reference Export" version="7.0">
+                <form string="Reference Export">
                 	<field name="export_format_id" colspan="4"/>        	  	
                     <button icon="gtk-ok" string="Start Export" name="startexport" type="object" colspan="4"/>
-                    
                     <field name="file_export_log" colspan="4"/>
-                    <div>
-                        <p>Exportfile: <field name="file_export" readonly="1" filename="file_export_name"/></p>
-                    </div>
+                    <field name="file_export" colspan="4" filename="file_export_name"/> 
+                    <field name="file_export_name" string="Filename" invisible="1"/>
                     <button icon="gtk-cancel" special="cancel" string="Cancel" colspan="4"/>   
                 </form>
              </field>

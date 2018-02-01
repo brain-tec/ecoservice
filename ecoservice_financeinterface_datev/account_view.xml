@@ -65,18 +65,6 @@
             	</field>
             </field>
         </record>   
-
-        <record id="view_move_form_inherit_datev_bu" model="ir.ui.view">
-            <field name="name">account.move.form.inherit.datev_bu</field>
-            <field name="model">account.move</field>
-            <field name="type">form</field>
-        	<field name="inherit_id" ref="ecoservice_financeinterface.view_move_form_inherit_ecofi2"/>
-        	<field name="arch" type="xml">
-        		<xpath expr="/form/notebook/page/field/tree/field[@name='ecofi_taxid']" position="after">
-        			<field name="ecofi_bu" select="2"/>
-        		</xpath>
-        	</field>
-    	</record>
    	</data>
 </openerp>
 	

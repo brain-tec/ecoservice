@@ -95,32 +95,3 @@ msgstr "Debitoren Konto erzeugen"
 msgid "Receivable Sequence"
 msgstr "Debitoren Sequenz"
 
-#. module: ecoservice_partner_account_company
-#: field:res.partner,receivable_account_created:0
-msgid "Receivable account created"
-msgstr "Debitoren Konto ist erstellt"
-
-#. module: ecoservice_partner_account_company
-#: field:res.partner,payable_account_created:0
-msgid "Payable account created"
-msgstr "Kreditoren Konto ist erstellt"
-
-#. module: ecoservice_partner_account_company
-#: code:addons/ecoservice_partner_account_company/ecoservice_partner_auto_account_company.py:160
-#: code:addons/ecoservice_partner_account_company/ecoservice_partner_auto_account_company.py:162
-#, python-format
-msgid "Warning"
-msgstr "Warnung"
-
-#. module: ecoservice_partner_account_company
-#: code:addons/ecoservice_partner_account_company/ecoservice_partner_auto_account_company.py:162
-#, python-format
-msgid "Couldn't create receivable account. It already exists!"
-msgstr "Es kann kein Debitoren Konto erstellt werden, weil es schon erstellt wurde!"
-
-#. module: ecoservice_partner_account_company
-#: code:addons/ecoservice_partner_account_company/ecoservice_partner_auto_account_company.py:160
-#, python-format
-msgid "Couldn't create payable account. It already exists!"
-msgstr "Es kann kein Kreditoren Konto erstellt werden, weil es schon erstellt wurde!"
-

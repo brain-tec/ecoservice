@@ -86,7 +86,6 @@
             <field name="inherit_id" ref="account.view_partner_property_form"/>
             <field name="arch" type="xml">
             	<field name="property_account_receivable" position="before">
-            		<field name="receivable_account_created"/>
             		<button name="create_accounts" type="object" string="Create Receivable Account" context="{'type': 'receivable'}" groups="account.group_account_invoice" colspan="2"/>
             	</field>
             </field>
@@ -99,7 +98,6 @@
             <field name="inherit_id" ref="account.view_partner_property_form"/>
             <field name="arch" type="xml">
             	<field name="property_account_payable" position="before">
-            		<field name="payable_account_created"/>
             		<button name="create_accounts" type="object" string="Create Payable Account" context="{'type': 'payable'}" groups="account.group_account_invoice" colspan="2"/>
             	</field>
             </field>

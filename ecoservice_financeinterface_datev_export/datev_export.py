@@ -64,11 +64,8 @@ class ecofi_datev_formate(osv.osv):
         res = {'log': '', 'value': False}
         if spaltentyp in checkdict:
             try:
-                if value == '' or value is False:
-                    res['value'] = ''
-                else:
-                    value = eval(checkdict[spaltentyp][0])
-                    res['value'] = ustr(value).encode('encoding' in context and context['encoding'] or 'iso-8859-1')
+                value = eval(checkdict[spaltentyp][0])
+                res['value'] = ustr(value).encode('encoding' in context and context['encoding'] or 'iso-8859-1')
             except:
                 res['log'] = _("Value %s could not be convertet %s!" % (value, checkdict[spaltentyp][1]))
         return res
@@ -164,6 +161,7 @@ class ecofi_datev_formate(osv.osv):
                             if len(thisspalte) == 1:
                                 self.pool.get('ecofi.datev.spalten').write(cr, uid, thisspalte, spaltedict, context)
                             else:
+                                print spaltedict
                                 self.pool.get('ecofi.datev.spalten').create(cr, uid, spaltedict, context)
                         counter += 1
         return True
