@@ -27,6 +27,7 @@ from decimal import Decimal
 from tools.translate import _
 from tools import ustr
 import netsvc
+from datetime import datetime
 logger = netsvc.Logger()
 
 
@@ -153,6 +154,7 @@ class ecofi(osv.osv):
         """
         if context.has_key('export_interface'):
             if context['export_interface'] == 'datev':
+                ecofi_csv.writerow(bookingdict['datevheader'])
                 ecofi_csv.writerow(bookingdict['buchungsheader'])
                 for buchungsatz in bookingdict['buchungen']:
                     ecofi_csv.writerow(buchungsatz)
@@ -167,6 +169,8 @@ class ecofi(osv.osv):
         context['waehrung'] = False
         if context.has_key('export_interface'):
             if context['export_interface'] == 'datev':
+                if bookingdict.has_key('datevheader') is False:
+                    bookingdict['datevheader'] = self.datevHeaderData(cr, uid, bookingdict['additional_data'], context)
                 if bookingdict.has_key('buchungen') is False:
                     bookingdict['buchungen'] = []
                 if bookingdict.has_key('buchungsheader') is False:
@@ -230,7 +234,75 @@ class ecofi(osv.osv):
             uid, move, buchungserror, errorcount, thislog, thismovename, exportmethod, partnererror, buchungszeilencount, bookingdict,
             context=context)
         return buchungserror, errorcount, thislog, partnererror, buchungszeilencount, bookingdict
-   
+
+    def datevHeaderData(self, cr, uid, additional_data, context = {}):
+        """ Method that creates the Datev CSV Header
+              """
+
+        now = datetime.now().strftime('%Y%m%d%H%M%S000')
+
+        period_id = additional_data['period']
+        period = self.pool.get('account.period').browse(cr, uid, [period_id], context=context)[0]
+        fiscalyear_start_date = period.fiscalyear_id.date_start.replace("-", "")
+        period_start_date = period.date_start.replace("-", "")
+        period_end_date = period.date_stop.replace("-", "")
+
+
+        vorlaufname = additional_data['vorlaufname']
+
+        user = self.pool.get('res.users').browse(cr, uid, [uid], context)[0]
+        user_name = user.name
+        company_name = user.company_id and user.company_id.name
+
+        headerline = []
+        #DATEV-Format
+        headerline.append(ustr("EXTF").encode("iso-8859-1"))
+        #Version des DATEV-Formats
+        headerline.append(ustr("510").encode("iso-8859-1"))
+        #Datenkategorie
+        headerline.append(ustr("21").encode("iso-8859-1"))
+        #Formatname
+        headerline.append(ustr("Buchungsstapel").encode("iso-8859-1"))
+        #Formatversion
+        headerline.append(ustr("7").encode("iso-8859-1"))
+        #erzeugt am
+        headerline.append(ustr(now).encode("iso-8859-1"))
+        #importiert am
+        headerline.append(ustr("").encode("iso-8859-1"))
+        #Herkunft
+        headerline.append(ustr(company_name).encode("iso-8859-1"))
+        #exportiert von
+        headerline.append(ustr(user_name).encode("iso-8859-1"))
+        #importiert von
+        headerline.append(ustr("").encode("iso-8859-1"))
+        #Beraternummer
+        headerline.append(ustr("").encode("iso-8859-1"))
+        #Mandantennummer
+        headerline.append(ustr("").encode("iso-8859-1"))
+        #Wirtschaftsjahresbeginn
+        headerline.append(ustr(fiscalyear_start_date).encode("iso-8859-1"))
+        #Sachkontenlänge
+        headerline.append(ustr("4").encode("iso-8859-1"))
+        #Datum Beginn Buchungsstapel
+        headerline.append(ustr(period_start_date).encode("iso-8859-1"))
+        #Datum Ende Buchungsstapel
+        headerline.append(ustr(period_end_date).encode("iso-8859-1"))
+        #Bezeichnung
+        headerline.append(ustr(vorlaufname).encode("iso-8859-1"))
+        #Diktatkürzel
+        headerline.append(ustr("").encode("iso-8859-1"))
+        #Buchungstyp
+        headerline.append(ustr("1").encode("iso-8859-1"))
+        #Rechnungslegungszweck
+        headerline.append(ustr("").encode("iso-8859-1"))
+        #Festschreibung
+        headerline.append(ustr("").encode("iso-8859-1"))
+        #WKZ
+        headerline.append(ustr("").encode("iso-8859-1"))
+
+
+        return headerline
+
     def buchungenHeaderDatev(self):
         """ Method that creates the Datev CSV Headerlione
         """
@@ -343,6 +415,35 @@ class ecofi(osv.osv):
         
         #column 93
         buchung.append(ustr("Zugeordnete Fälligkeit").encode("iso-8859-1"))
+
+        #column 94-100
+        buchung.append(ustr("Skontotyp").encode("iso-8859-1"))
+        buchung.append(ustr("Auftragsnummer").encode("iso-8859-1"))
+        buchung.append(ustr("Buchungstyp").encode("iso-8859-1"))
+        buchung.append(ustr("USt-Schlüssel (Anzahlungen)").encode("iso-8859-1"))
+        buchung.append(ustr("EU-Mitgliedstaat (Anzahlungen)").encode("iso-8859-1"))
+        buchung.append(ustr("Sachverhalt L+L (Anzahlungen)").encode("iso-8859-1"))
+        buchung.append(ustr("EU-Steuersatz (Anzahlungen)").encode("iso-8859-1"))
+
+        # column 101-110
+        buchung.append(ustr("Erlöskonto (Anzahlungen)").encode("iso-8859-1"))
+        buchung.append(ustr("Herkunft-Kz").encode("iso-8859-1"))
+        buchung.append(ustr("Leerfeld").encode("iso-8859-1"))
+        buchung.append(ustr("KOST-Datum").encode("iso-8859-1"))
+        buchung.append(ustr("SEPA-Mandatsreferenz").encode("iso-8859-1"))
+        buchung.append(ustr("Skontosperre").encode("iso-8859-1"))
+        buchung.append(ustr("Gesellschaftername").encode("iso-8859-1"))
+        buchung.append(ustr("Beteiligtennummer").encode("iso-8859-1"))
+        buchung.append(ustr("Identifikationsnummer").encode("iso-8859-1"))
+        buchung.append(ustr("Zeichnernummer").encode("iso-8859-1"))
+
+        # column 111-116
+        buchung.append(ustr("Postensperre bis").encode("iso-8859-1"))
+        buchung.append(ustr("Bezeichnung SoBil-Sachverhalt").encode("iso-8859-1"))
+        buchung.append(ustr("Kennzeichen SoBil-Buchung").encode("iso-8859-1"))
+        buchung.append(ustr("Festschreibung").encode("iso-8859-1"))
+        buchung.append(ustr("Leistungsdatum").encode("iso-8859-1"))
+        buchung.append(ustr("Datum Zuord. Steuerperiode").encode("iso-8859-1"))
         
         return buchung
             
@@ -461,6 +562,36 @@ class ecofi(osv.osv):
         
         #column 93
         buchung.append(datevdict['empty'].encode("iso-8859-1"))
+
+        # column 94-100
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+
+        # column 101-110
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+
+        # column 111-116
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+        buchung.append(datevdict['empty'].encode("iso-8859-1"))
+
         
         #original
 #         buchung.append(datevdict['Waehrung'].encode("iso-8859-1"))
